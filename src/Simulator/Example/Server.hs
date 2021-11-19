@@ -38,8 +38,8 @@ calendar :: [Event]
 calendar
   = [ Event 0 Arrival   1
     , Event 2 Arrival   2
-    , Event 2 Departure 1
     , Event 1 Departure 1
+    , Event 2 Departure 2
     , Event 1 Arrival   3
     , Event 1 Arrival   4
     , Event 1 Arrival   5
@@ -77,12 +77,12 @@ transition (State currentTime queue waitingTimes serviceTimes)
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, _ Seq.:<| t) -> t
     waitingTimes' = case (eventType, queue) of
-      (Arrival, Seq.Empty)     -> waitingTimes
+      (Arrival, Seq.Empty)     -> Map.insert client 0 serviceTimes
       (Arrival, _ Seq.:<| t)   -> incrementTimes waitingTimes t time
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, _ Seq.:<| t) -> incrementTimes waitingTimes t time
     serviceTimes' = case (eventType, queue) of
-      (Arrival, Seq.Empty)     -> Map.insert client time serviceTimes
+      (Arrival, Seq.Empty)     -> Map.insert client 0 serviceTimes
       (Arrival, h Seq.:<| _)   -> incrementTime serviceTimes h time
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, h Seq.:<| _) -> incrementTime serviceTimes h time
