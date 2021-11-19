@@ -10,15 +10,13 @@ class Simulation state event result
   result :: state -> result
 
 finalState
-  :: forall state event result
-   . Simulation state event result
+  :: Simulation state event result
   => state -> [event] -> state
 finalState state (event:events) = finalState (transition state event) events
 finalState state [] = state
 
 states
- :: forall state event result
-   . Simulation state event result
+  :: Simulation state event result
   => state -> [event] -> [state]
 states state events = go [] events
   where
@@ -27,7 +25,6 @@ states state events = go [] events
     go ss [] = reverse ss
 
 simulation
-  :: forall state event result
-   . Simulation state event result
+  :: Simulation state event result
   => state -> [event] -> result
 simulation state calendar = result $ finalState state calendar
