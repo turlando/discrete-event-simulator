@@ -34,7 +34,11 @@ data Event
     }
 
 data Result
-  = Result { resultIsBusy :: Bool }
+  = Result
+    { resultExpectedWaitingTime :: Float
+    , resultUtilization         :: Float
+    , resultExpectedQueueLength :: Float
+    }
     deriving (Show)
 
 calendar :: [Event]
@@ -81,7 +85,7 @@ transition (State currentTime queue waitingTimes serviceTimes utilization)
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, _ Seq.:<| t) -> t
     waitingTimes' = case (eventType, queue) of
-      (Arrival, Seq.Empty)     -> Map.insert client 0 serviceTimes
+      (Arrival, Seq.Empty)     -> Map.insert client 0 waitingTimes
       (Arrival, _ Seq.:<| t)   -> incrementTimes waitingTimes t time
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, _ Seq.:<| t) -> incrementTimes waitingTimes t time
@@ -92,6 +96,22 @@ transition (State currentTime queue waitingTimes serviceTimes utilization)
       (Departure, h Seq.:<| _) -> incrementTime serviceTimes h time
     utilization' = Map.insertWith (+) (Seq.length queue) time utilization
 
+result :: State -> Result
+result (State currentTime _queue waitingTimes serviceTimes utilization)
+  = Result expectedWaitingTime utilization' expectedQueueLength
+  where
+    expectedWaitingTime
+      = (/) (fromIntegral ((+) (sum (Map.elems waitingTimes))
+                               (sum (Map.elems serviceTimes))))
+            (fromIntegral (Map.size waitingTimes))
+    utilization'
+      = (/) (fromIntegral (sum (Map.elems serviceTimes)))
+            (fromIntegral currentTime)
+    expectedQueueLength
+      = (/) (fromIntegral (sum (zipWith (*) (Map.keys utilization)
+                                            (Map.elems utilization))))
+            (fromIntegral currentTime)
+
 instance Simulator.Simulation State Event Result where
   transition = transition
-  result = undefined
+  result = result
