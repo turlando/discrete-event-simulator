@@ -10,8 +10,10 @@ import qualified Simulator
 
 type Time = Int
 type Client = Int
+type ClientsCount = Int
 type ClientQueue = Seq Client
 type ClientsTime = Map Client Time
+type Utilization = Map ClientsCount Time
 
 data EventType = Arrival | Departure
 
@@ -21,6 +23,7 @@ data State
    , stateQueue        :: Seq Client
    , stateWaitingTimes :: ClientsTime
    , stateServiceTimes :: ClientsTime
+   , stateUtilization  :: Utilization
    } deriving (Show)
 
 data Event
@@ -54,6 +57,7 @@ initialState
           , stateQueue        = Seq.empty
           , stateWaitingTimes = Map.empty
           , stateServiceTimes = Map.empty
+          , stateUtilization  = Map.empty
           }
 
 incrementTime :: ClientsTime -> Client -> Time -> ClientsTime
@@ -66,9 +70,9 @@ incrementTimes m clients timeDelta = go m clients
     go m' Seq.Empty = m'
 
 transition :: State -> Event -> State
-transition (State currentTime queue waitingTimes serviceTimes)
+transition (State currentTime queue waitingTimes serviceTimes utilization)
            (Event time eventType client)
-  = State currentTime' queue' waitingTimes' serviceTimes'
+  = State currentTime' queue' waitingTimes' serviceTimes' utilization'
   where
     currentTime' = currentTime + time
     queue' = case (eventType, queue) of
@@ -86,6 +90,7 @@ transition (State currentTime queue waitingTimes serviceTimes)
       (Arrival, h Seq.:<| _)   -> incrementTime serviceTimes h time
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, h Seq.:<| _) -> incrementTime serviceTimes h time
+    utilization' = Map.insertWith (+) (Seq.length queue) time utilization
 
 instance Simulator.Simulation State Event Result where
   transition = transition
