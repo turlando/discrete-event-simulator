@@ -6,5 +6,8 @@ import qualified Simulator
 import qualified Simulator.Example.Server as Server
 
 main :: IO ()
-main = pPrint
-     $ Simulator.states Server.initialState Server.calendar
+main = do
+  let states = Simulator.states Server.initialState Server.calendar
+      result = Simulator.result $ last states
+  pPrint states
+  pPrint result

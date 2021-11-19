@@ -22,8 +22,7 @@ states
   => state -> [event] -> [state]
 states state events = go [] events
   where
-    go (s:ss) (e:es)
-      = go ((transition s e):s:ss) es
+    go (s:ss) (e:es) = go ((transition s e):s:ss) es
     go [] es = go [state] es
     go ss [] = reverse ss
 
