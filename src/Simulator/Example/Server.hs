@@ -15,11 +15,6 @@ type ClientQueue = Seq Client
 type ClientsTime = Map Client Time
 type Utilization = Map ClientsCount Time
 
-data EventType
-  = Arrival Client
-  | Departure
-  deriving (Show)
-
 data State
   = State
     { stateCurrentTime  :: Time
@@ -34,6 +29,11 @@ data Event
     { eventTime      :: Time
     , eventEventType :: EventType
     }
+
+data EventType
+  = Arrival Client
+  | Departure
+  deriving (Show)
 
 data Result
   = Result
