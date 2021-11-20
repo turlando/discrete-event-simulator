@@ -16,7 +16,7 @@ type ClientsTime = Map Client Time
 type Utilization = Map ClientsCount Time
 
 data EventType
-  = Arrival
+  = Arrival Client
   | Departure
   deriving (Show)
 
@@ -33,7 +33,6 @@ data Event
   = Event
     { eventTime      :: Time
     , eventEventType :: EventType
-    , eventClient    :: Client
     }
 
 data Result
@@ -45,16 +44,16 @@ data Result
 
 calendar :: [Event]
 calendar
-  = [ Event 0 Arrival   1
-    , Event 2 Arrival   2
-    , Event 1 Departure 1
-    , Event 2 Departure 2
-    , Event 1 Arrival   3
-    , Event 1 Arrival   4
-    , Event 1 Arrival   5
-    , Event 1 Departure 3
-    , Event 4 Departure 4
-    , Event 2 Departure 5
+  = [ Event 0 (Arrival 1)
+    , Event 2 (Arrival 2)
+    , Event 1 Departure
+    , Event 2 Departure
+    , Event 1 (Arrival 3)
+    , Event 1 (Arrival 4)
+    , Event 1 (Arrival 5)
+    , Event 1 Departure
+    , Event 4 Departure
+    , Event 2 Departure
     ]
 
 initialState :: State
@@ -77,23 +76,23 @@ incrementTimes m clients timeDelta = go m clients
 
 transition :: State -> Event -> State
 transition (State currentTime queue waitingTimes serviceTimes utilization)
-           (Event time eventType client)
+           (Event time eventType)
   = State currentTime' queue' waitingTimes' serviceTimes' utilization'
   where
     currentTime' = currentTime + time
     queue' = case (eventType, queue) of
-      (Arrival, Seq.Empty)     -> Seq.singleton client
-      (Arrival, _ Seq.:<| _)   -> queue Seq.|> client
+      (Arrival c, Seq.Empty)   -> Seq.singleton c
+      (Arrival c, _ Seq.:<| _) -> queue Seq.|> c
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, _ Seq.:<| t) -> t
     waitingTimes' = case (eventType, queue) of
-      (Arrival, Seq.Empty)     -> Map.insert client 0 waitingTimes
-      (Arrival, _ Seq.:<| t)   -> incrementTimes waitingTimes t time
+      (Arrival c, Seq.Empty)   -> Map.insert c 0 waitingTimes
+      (Arrival c, _ Seq.:<| t) -> incrementTimes waitingTimes t time
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, _ Seq.:<| t) -> incrementTimes waitingTimes t time
     serviceTimes' = case (eventType, queue) of
-      (Arrival, Seq.Empty)     -> Map.insert client 0 serviceTimes
-      (Arrival, h Seq.:<| _)   -> incrementTime serviceTimes h time
+      (Arrival c, Seq.Empty)   -> Map.insert c 0 serviceTimes
+      (Arrival c, h Seq.:<| _) -> incrementTime serviceTimes h time
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, h Seq.:<| _) -> incrementTime serviceTimes h time
     utilization' = Map.insertWith (+) (Seq.length queue) time utilization
@@ -129,9 +128,8 @@ instance Show State where
 
 instance Show Event where
   show x
-    = "{ time:   " <> (show $ eventTime x)      <> "\n"
-   <> ", type:   " <> (show $ eventEventType x) <> "\n"
-   <> ", client: " <> (show $ eventClient x)    <> "\n"
+    = "{ time: " <> (show $ eventTime x)      <> "\n"
+   <> ", type: " <> (show $ eventEventType x) <> "\n"
    <> "}"
 
 instance Show Result where
