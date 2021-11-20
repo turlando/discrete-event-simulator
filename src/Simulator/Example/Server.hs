@@ -42,6 +42,16 @@ data Result
     , resultExpectedQueueLength :: Float
     }
 
+initialState :: State
+initialState
+  = State
+    { stateCurrentTime  = 0
+    , stateQueue        = Seq.empty
+    , stateWaitingTimes = Map.empty
+    , stateServiceTimes = Map.empty
+    , stateUtilization  = Map.empty
+    }
+
 calendar :: [Event]
 calendar
   = [ Event 0 (Arrival 1)
@@ -55,16 +65,6 @@ calendar
     , Event 4 Departure
     , Event 2 Departure
     ]
-
-initialState :: State
-initialState
-  = State
-    { stateCurrentTime  = 0
-    , stateQueue        = Seq.empty
-    , stateWaitingTimes = Map.empty
-    , stateServiceTimes = Map.empty
-    , stateUtilization  = Map.empty
-    }
 
 incrementTime :: ClientsTime -> Client -> Time -> ClientsTime
 incrementTime m c timeDelta = Map.insertWith (+) c timeDelta m
