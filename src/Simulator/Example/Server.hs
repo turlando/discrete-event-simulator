@@ -15,16 +15,19 @@ type ClientQueue = Seq Client
 type ClientsTime = Map Client Time
 type Utilization = Map ClientsCount Time
 
-data EventType = Arrival | Departure
+data EventType
+  = Arrival
+  | Departure
+  deriving (Show)
 
 data State
   = State
-   { stateCurrentTime  :: Time
-   , stateQueue        :: Seq Client
-   , stateWaitingTimes :: ClientsTime
-   , stateServiceTimes :: ClientsTime
-   , stateUtilization  :: Utilization
-   } deriving (Show)
+    { stateCurrentTime  :: Time
+    , stateQueue        :: Seq Client
+    , stateWaitingTimes :: ClientsTime
+    , stateServiceTimes :: ClientsTime
+    , stateUtilization  :: Utilization
+    }
 
 data Event
   = Event
@@ -39,7 +42,6 @@ data Result
     , resultUtilization         :: Float
     , resultExpectedQueueLength :: Float
     }
-    deriving (Show)
 
 calendar :: [Event]
 calendar
@@ -115,3 +117,26 @@ result (State currentTime _queue waitingTimes serviceTimes utilization)
 instance Simulator.Simulation State Event Result where
   transition = transition
   result = result
+
+instance Show State where
+  show x
+    = "{ time:         " <> (show $ stateCurrentTime x)  <> "\n"
+   <> ", queue:        " <> (show $ stateQueue x)        <> "\n"
+   <> ", waitingTimes: " <> (show $ stateWaitingTimes x) <> "\n"
+   <> ", serviceTimes: " <> (show $ stateServiceTimes x) <> "\n"
+   <> ", utilization:  " <> (show $ stateUtilization x)  <> "\n"
+   <> "}"
+
+instance Show Event where
+  show x
+    = "{ time:   " <> (show $ eventTime x)      <> "\n"
+   <> ", type:   " <> (show $ eventEventType x) <> "\n"
+   <> ", client: " <> (show $ eventClient x)    <> "\n"
+   <> "}"
+
+instance Show Result where
+  show x
+    = "{ expectedWaitingTime: " <> (show $ resultExpectedWaitingTime x) <> "\n"
+   <> ", utilization:         " <> (show $ resultUtilization x)         <> "\n"
+   <> ", expectedQueueLength: " <> (show $ resultExpectedQueueLength x) <> "\n"
+   <> "}"
