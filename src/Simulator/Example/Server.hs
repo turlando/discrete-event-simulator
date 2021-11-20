@@ -58,12 +58,13 @@ calendar
 
 initialState :: State
 initialState
-  = State { stateCurrentTime  = 0
-          , stateQueue        = Seq.empty
-          , stateWaitingTimes = Map.empty
-          , stateServiceTimes = Map.empty
-          , stateUtilization  = Map.empty
-          }
+  = State
+    { stateCurrentTime  = 0
+    , stateQueue        = Seq.empty
+    , stateWaitingTimes = Map.empty
+    , stateServiceTimes = Map.empty
+    , stateUtilization  = Map.empty
+    }
 
 incrementTime :: ClientsTime -> Client -> Time -> ClientsTime
 incrementTime m c timeDelta = Map.insertWith (+) c timeDelta m
@@ -87,12 +88,12 @@ transition (State currentTime queue waitingTimes serviceTimes utilization)
       (Departure, _ Seq.:<| t) -> t
     waitingTimes' = case (eventType, queue) of
       (Arrival c, Seq.Empty)   -> Map.insert c 0 waitingTimes
-      (Arrival c, _ Seq.:<| t) -> incrementTimes waitingTimes t time
+      (Arrival _, _ Seq.:<| t) -> incrementTimes waitingTimes t time
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, _ Seq.:<| t) -> incrementTimes waitingTimes t time
     serviceTimes' = case (eventType, queue) of
       (Arrival c, Seq.Empty)   -> Map.insert c 0 serviceTimes
-      (Arrival c, h Seq.:<| _) -> incrementTime serviceTimes h time
+      (Arrival _, h Seq.:<| _) -> incrementTime serviceTimes h time
       (Departure, Seq.Empty)   -> error "Illegal state"
       (Departure, h Seq.:<| _) -> incrementTime serviceTimes h time
     utilization' = Map.insertWith (+) (Seq.length queue) time utilization
