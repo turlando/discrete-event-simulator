@@ -1,7 +1,7 @@
 module Simulator.Example.Server where
 
 import Data.Map (Map)
-import Data.Sequence (Seq)
+import Data.Sequence (Seq(Empty, (:<|)), (|>))
 import Simulator (Simulation)
 
 import qualified Data.Map as Map
@@ -72,8 +72,8 @@ incrementTime m c timeDelta = Map.insertWith (+) c timeDelta m
 incrementTimes :: ClientsTime -> Seq Client -> Time -> ClientsTime
 incrementTimes m clients timeDelta = go m clients
   where
-    go m' (x Seq.:<| xs) = go (Map.insertWith (+) x timeDelta m') xs
-    go m' Seq.Empty = m'
+    go m' (x :<| xs) = go (Map.insertWith (+) x timeDelta m') xs
+    go m' Empty = m'
 
 transition :: State -> Event -> State
 transition (State currentTime queue waitingTimes serviceTimes utilization)
@@ -82,20 +82,20 @@ transition (State currentTime queue waitingTimes serviceTimes utilization)
   where
     currentTime' = currentTime + time
     queue' = case (eventType, queue) of
-      (Arrival c, Seq.Empty)   -> Seq.singleton c
-      (Arrival c, _ Seq.:<| _) -> queue Seq.|> c
-      (Departure, Seq.Empty)   -> error "Illegal state"
-      (Departure, _ Seq.:<| t) -> t
+      (Arrival c, Empty)   -> Seq.singleton c
+      (Arrival c, _ :<| _) -> queue |> c
+      (Departure, Empty)   -> error "Illegal state"
+      (Departure, _ :<| t) -> t
     waitingTimes' = case (eventType, queue) of
-      (Arrival c, Seq.Empty)   -> Map.insert c 0 waitingTimes
-      (Arrival _, _ Seq.:<| t) -> incrementTimes waitingTimes t time
-      (Departure, Seq.Empty)   -> error "Illegal state"
-      (Departure, _ Seq.:<| t) -> incrementTimes waitingTimes t time
+      (Arrival c, Empty)   -> Map.insert c 0 waitingTimes
+      (Arrival _, _ :<| t) -> incrementTimes waitingTimes t time
+      (Departure, Empty)   -> error "Illegal state"
+      (Departure, _ :<| t) -> incrementTimes waitingTimes t time
     serviceTimes' = case (eventType, queue) of
-      (Arrival c, Seq.Empty)   -> Map.insert c 0 serviceTimes
-      (Arrival _, h Seq.:<| _) -> incrementTime serviceTimes h time
-      (Departure, Seq.Empty)   -> error "Illegal state"
-      (Departure, h Seq.:<| _) -> incrementTime serviceTimes h time
+      (Arrival c, Empty)   -> Map.insert c 0 serviceTimes
+      (Arrival _, h :<| _) -> incrementTime serviceTimes h time
+      (Departure, Empty)   -> error "Illegal state"
+      (Departure, h :<| _) -> incrementTime serviceTimes h time
     utilization' = Map.insertWith (+) (Seq.length queue) time utilization
 
 result :: State -> Result
