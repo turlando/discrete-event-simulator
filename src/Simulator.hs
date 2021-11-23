@@ -9,12 +9,6 @@ class Simulation state event result
   transition :: state -> event -> state
   result :: state -> result
 
-finalState
-  :: Simulation state event result
-  => state -> [event] -> state
-finalState state (event:events) = finalState (transition state event) events
-finalState state [] = state
-
 states
   :: Simulation state event result
   => state -> [event] -> [state]
@@ -23,8 +17,3 @@ states state events = go [] events
     go (s:ss) (e:es) = go ((transition s e):s:ss) es
     go [] es = go [state] es
     go ss [] = reverse ss
-
-simulation
-  :: Simulation state event result
-  => state -> [event] -> result
-simulation state calendar = result $ finalState state calendar

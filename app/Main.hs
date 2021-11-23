@@ -17,7 +17,7 @@ main = do
       result  = Simulator.result $ last states
 
   putStrLn "Initial state:"
-  putStrLn $ indent 4 $ show $ Server.initialState
+  putStrLn $ indent 4 $ show Server.initialState
   putStrLn ""
 
   forM_ (zip3 [1::Int ..] Server.calendar states') $ \(i, event, state) -> do

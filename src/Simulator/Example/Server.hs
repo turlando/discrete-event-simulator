@@ -10,17 +10,17 @@ import qualified Simulator
 
 type Time = Int
 type Client = Int
-type ClientsCount = Int
+type ClientCount = Int
 type ClientQueue = Seq Client
-type ClientsTime = Map Client Time
-type Utilization = Map ClientsCount Time
+type ClientTimes = Map Client Time
+type Utilization = Map ClientCount Time
 
 data State
   = State
     { stateCurrentTime  :: Time
     , stateQueue        :: Seq Client
-    , stateWaitingTimes :: ClientsTime
-    , stateServiceTimes :: ClientsTime
+    , stateWaitingTimes :: ClientTimes
+    , stateServiceTimes :: ClientTimes
     , stateUtilization  :: Utilization
     }
 
@@ -66,10 +66,10 @@ calendar
     , Event 2 Departure
     ]
 
-incrementTime :: ClientsTime -> Client -> Time -> ClientsTime
-incrementTime m c timeDelta = Map.insertWith (+) c timeDelta m
+incrementTime :: ClientTimes -> Client -> Time -> ClientTimes
+incrementTime m client timeDelta = Map.insertWith (+) client timeDelta m
 
-incrementTimes :: ClientsTime -> Seq Client -> Time -> ClientsTime
+incrementTimes :: ClientTimes -> Seq Client -> Time -> ClientTimes
 incrementTimes m clients timeDelta = go m clients
   where
     go m' (x :<| xs) = go (Map.insertWith (+) x timeDelta m') xs
@@ -119,23 +119,23 @@ instance Simulator.Simulation State Event Result where
   result = result
 
 instance Show State where
-  show x
-    = "{ time:         " <> (show $ stateCurrentTime x)  <> "\n"
-   <> ", queue:        " <> (show $ stateQueue x)        <> "\n"
-   <> ", waitingTimes: " <> (show $ stateWaitingTimes x) <> "\n"
-   <> ", serviceTimes: " <> (show $ stateServiceTimes x) <> "\n"
-   <> ", utilization:  " <> (show $ stateUtilization x)  <> "\n"
+  show (State currentTime queue waitingTimes serviceTimes utilization)
+    = "{ time:         " <> show currentTime  <> "\n"
+   <> ", queue:        " <> show queue        <> "\n"
+   <> ", waitingTimes: " <> show waitingTimes <> "\n"
+   <> ", serviceTimes: " <> show serviceTimes <> "\n"
+   <> ", utilization:  " <> show utilization  <> "\n"
    <> "}"
 
 instance Show Event where
-  show x
-    = "{ time: " <> (show $ eventTime x)      <> "\n"
-   <> ", type: " <> (show $ eventEventType x) <> "\n"
+  show (Event time eventType)
+    = "{ time: " <> show time      <> "\n"
+   <> ", type: " <> show eventType <> "\n"
    <> "}"
 
 instance Show Result where
-  show x
-    = "{ expectedWaitingTime: " <> (show $ resultExpectedWaitingTime x) <> "\n"
-   <> ", utilization:         " <> (show $ resultUtilization x)         <> "\n"
-   <> ", expectedQueueLength: " <> (show $ resultExpectedQueueLength x) <> "\n"
+  show (Result expectedWaitingTime utilization expectedQueueLength)
+    = "{ expectedWaitingTime: " <> show expectedWaitingTime <> "\n"
+   <> ", utilization:         " <> show utilization         <> "\n"
+   <> ", expectedQueueLength: " <> show expectedQueueLength <> "\n"
    <> "}"
