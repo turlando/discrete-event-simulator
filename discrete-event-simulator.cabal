@@ -27,6 +27,7 @@ library
       Simulator
       Simulator.Calendar
       Simulator.Example.Server
+      Simulator.Frame
       Simulator.Instant
   other-modules:
       Paths_discrete_event_simulator

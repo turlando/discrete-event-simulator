@@ -1,23 +1,28 @@
 module Simulator.Example.Server where
 
+import Data.Function (on)
 import Data.Map (Map)
 import Data.Sequence (Seq(Empty, (:<|)), (|>))
 import Simulator (Simulation)
+import Simulator.Calendar (Calendar, CalendarEvent)
+import Simulator.Instant (Instant)
+import Simulator.Frame (Frame(Frame))
 
 import qualified Data.Map as Map
 import qualified Data.Sequence as Seq
 import qualified Simulator
+import qualified Simulator.Calendar as Calendar
+import qualified Simulator.Instant as Instant
 
-type Time = Int
-type Client = Int
+type Client      = Int
 type ClientCount = Int
 type ClientQueue = Seq Client
-type ClientTimes = Map Client Time
-type Utilization = Map ClientCount Time
+type ClientTimes = Map Client Instant
+type Utilization = Map ClientCount Instant
 
 data State
   = State
-    { stateCurrentTime  :: Time
+    { stateTime         :: Instant
     , stateQueue        :: Seq Client
     , stateWaitingTimes :: ClientTimes
     , stateServiceTimes :: ClientTimes
@@ -25,12 +30,6 @@ data State
     }
 
 data Event
-  = Event
-    { eventTime      :: Time
-    , eventEventType :: EventType
-    }
-
-data EventType
   = Arrival Client
   | Departure
   deriving (Show)
@@ -45,92 +44,99 @@ data Result
 initialState :: State
 initialState
   = State
-    { stateCurrentTime  = 0
+    { stateTime         = 0
     , stateQueue        = Seq.empty
     , stateWaitingTimes = Map.empty
     , stateServiceTimes = Map.empty
     , stateUtilization  = Map.empty
     }
 
-calendar :: [Event]
+calendar :: Calendar Event
 calendar
-  = [ Event 0 (Arrival 1)
-    , Event 2 (Arrival 2)
-    , Event 1 Departure
-    , Event 2 Departure
-    , Event 1 (Arrival 3)
-    , Event 1 (Arrival 4)
-    , Event 1 (Arrival 5)
-    , Event 1 Departure
-    , Event 4 Departure
-    , Event 2 Departure
+  = Calendar.fromList
+    [ (0,  Arrival 1)
+    , (2,  Arrival 2)
+    , (3,  Departure)
+    , (5,  Departure)
+    , (6,  Arrival 3)
+    , (7,  Arrival 4)
+    , (8,  Arrival 5)
+    , (9,  Departure)
+    , (13, Departure)
+    , (15, Departure)
     ]
 
-incrementTime :: ClientTimes -> Client -> Time -> ClientTimes
+incrementTime :: ClientTimes -> Client -> Instant -> ClientTimes
 incrementTime m client timeDelta = Map.insertWith (+) client timeDelta m
 
-incrementTimes :: ClientTimes -> Seq Client -> Time -> ClientTimes
+incrementTimes :: ClientTimes -> Seq Client -> Instant -> ClientTimes
 incrementTimes m clients timeDelta = go m clients
   where
     go m' (x :<| xs) = go (Map.insertWith (+) x timeDelta m') xs
     go m' Empty = m'
 
-transition :: State -> Event -> State
-transition (State currentTime queue waitingTimes serviceTimes utilization)
-           (Event time eventType)
-  = State currentTime' queue' waitingTimes' serviceTimes' utilization'
+transition :: State -> CalendarEvent Event -> State
+transition (State previousTime queue waitingTimes serviceTimes utilization)
+           (time, event)
+  = State time queue' waitingTimes' serviceTimes' utilization'
   where
-    currentTime' = currentTime + time
-    queue' = case (eventType, queue) of
+    timeDelta = time - previousTime
+
+    queue' = case (event, queue) of
       (Arrival c, Empty)   -> Seq.singleton c
       (Arrival c, _ :<| _) -> queue |> c
       (Departure, Empty)   -> error "Illegal state"
       (Departure, _ :<| t) -> t
-    waitingTimes' = case (eventType, queue) of
-      (Arrival c, Empty)   -> Map.insert c 0 waitingTimes
-      (Arrival _, _ :<| t) -> incrementTimes waitingTimes t time
-      (Departure, Empty)   -> error "Illegal state"
-      (Departure, _ :<| t) -> incrementTimes waitingTimes t time
-    serviceTimes' = case (eventType, queue) of
-      (Arrival c, Empty)   -> Map.insert c 0 serviceTimes
-      (Arrival _, h :<| _) -> incrementTime serviceTimes h time
-      (Departure, Empty)   -> error "Illegal state"
-      (Departure, h :<| _) -> incrementTime serviceTimes h time
-    utilization' = Map.insertWith (+) (Seq.length queue) time utilization
 
-result :: State -> Result
-result (State currentTime _queue waitingTimes serviceTimes utilization)
+    waitingTimes' = case (event, queue) of
+      (Arrival c, Empty)   -> Map.insert c 0 waitingTimes
+      (Arrival _, _ :<| t) -> incrementTimes waitingTimes t timeDelta
+      (Departure, Empty)   -> error "Illegal state"
+      (Departure, _ :<| t) -> incrementTimes waitingTimes t timeDelta
+
+    serviceTimes' = case (event, queue) of
+      (Arrival c, Empty)   -> Map.insert c 0 serviceTimes
+      (Arrival _, h :<| _) -> incrementTime serviceTimes h timeDelta
+      (Departure, Empty)   -> error "Illegal state"
+      (Departure, h :<| _) -> incrementTime serviceTimes h timeDelta
+
+    utilization' = Map.insertWith (+) (Seq.length queue) timeDelta utilization
+
+result :: [Frame State Event] -> Result
+result frames
   = Result expectedWaitingTime utilization' expectedQueueLength
   where
+    Frame time _event (State _time _queue waitingTimes serviceTimes utilization)
+      = last frames
+
     expectedWaitingTime
-      = (/) (fromIntegral ((+) (sum (Map.elems waitingTimes))
-                               (sum (Map.elems serviceTimes))))
-            (fromIntegral (Map.size waitingTimes))
+      = ((/) `on` fromIntegral)
+        (Instant.toInt ((+) (sum (Map.elems waitingTimes))
+                            (sum (Map.elems serviceTimes))))
+        (Map.size waitingTimes)
+
     utilization'
-      = (/) (fromIntegral (sum (Map.elems serviceTimes)))
-            (fromIntegral currentTime)
+      = ((/) `on` (fromIntegral . Instant.toInt))
+        (sum (Map.elems serviceTimes))
+        time
+
     expectedQueueLength
-      = (/) (fromIntegral (sum (zipWith (*) (Map.keys utilization)
-                                            (Map.elems utilization))))
-            (fromIntegral currentTime)
+      = ((/) `on` fromIntegral)
+        (sum (zipWith (*) (Map.keys utilization)
+                          (map Instant.toInt (Map.elems utilization))))
+        (Instant.toInt time)
 
 instance Simulator.Simulation State Event Result where
   transition = transition
   result = result
 
 instance Show State where
-  show (State currentTime queue waitingTimes serviceTimes utilization)
-    = "{ time:         " <> show currentTime  <> "\n"
+  show (State time queue waitingTimes serviceTimes utilization)
+    = "{ time:         " <> show time         <> "\n"
    <> ", queue:        " <> show queue        <> "\n"
    <> ", waitingTimes: " <> show waitingTimes <> "\n"
    <> ", serviceTimes: " <> show serviceTimes <> "\n"
    <> ", utilization:  " <> show utilization  <> "\n"
-   <> "}"
-
-instance Show Event where
-  show (Event time eventType)
-    = "{ time: " <> show time      <> "\n"
-   <> ", type: " <> show eventType <> "\n"
    <> "}"
 
 instance Show Result where
