@@ -5,7 +5,7 @@ module Simulator.Instant
   ) where
 
 newtype Instant = Instant Int
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 fromInt :: Int -> Instant
 fromInt i = if i >= 0
