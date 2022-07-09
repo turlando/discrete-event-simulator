@@ -25,7 +25,6 @@ dependencies:
 library:
   source-dirs:
   - src
-  - examples
 
 ghc-options:
 - -Wall
@@ -37,9 +36,9 @@ default-extensions:
 - MultiParamTypeClasses
 
 executables:
-  discrete-event-simulator-exe:
+  simple-server:
     main:                Main.hs
-    source-dirs:         app
+    source-dirs:         examples/simple-server
     ghc-options:
     - -threaded
     - -rtsopts
