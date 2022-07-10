@@ -21,6 +21,8 @@ description:         Please see the README on GitHub at <https://github.com/turl
 
 dependencies:
 - base >= 4.7 && < 5
+- hashable
+- psqueues
 
 library:
   source-dirs:
@@ -31,9 +33,6 @@ ghc-options:
 - -Wcompat
 - -Wincomplete-record-updates
 - -Wredundant-constraints
-
-default-extensions:
-- MultiParamTypeClasses
 
 executables:
   simple-server:
