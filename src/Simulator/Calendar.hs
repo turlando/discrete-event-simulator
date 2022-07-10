@@ -13,5 +13,14 @@ fromList xs = Calendar $ Q.fromList $ reshape <$> xs
     reshape :: Entry event -> (Time, (), event)
     reshape (Entry time event) = (time, (), event)
 
-fold' :: (Entry event -> a -> a) -> a -> Calendar event -> a
-fold' f acc0 (Calendar q) = Q.fold' (\k _p v a -> (f (Entry k v) a)) acc0 q
+toList :: Calendar event -> [Entry event]
+toList (Calendar q) = reshape <$> Q.toList q
+  where
+    reshape :: (Time, (), event) -> Entry event
+    reshape (time, (), event) = Entry time event
+
+fold' :: (a -> Entry event -> a) -> a -> Calendar event -> a
+fold' f acc0 (Calendar q) = Q.fold' (\k _p v a -> (f a (Entry k v))) acc0 q
+
+scan :: (a -> Entry event -> a) -> a -> Calendar event -> [a]
+scan f acc0 c = scanl f acc0 $ toList c

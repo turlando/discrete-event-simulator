@@ -13,4 +13,11 @@ foldCalendar'
   => state
   -> Calendar event
   -> state
-foldCalendar' = Calendar.fold' $ flip transition
+foldCalendar' = Calendar.fold' transition
+
+transitions
+  :: Simulation state event
+  => state
+  -> Calendar event
+  -> [state]
+transitions = Calendar.scan transition
