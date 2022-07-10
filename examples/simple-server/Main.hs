@@ -2,29 +2,38 @@
 
 module Main where
 
+import Data.Foldable (toList)
+import Data.Map.Strict (Map)
 import Data.Sequence (Seq(Empty, (:<|)), (|>))
 import Simulator.Calendar (Calendar, Entry(..))
 import Simulator.Simulation (Simulation(..))
 import Simulator.Time (Time(..))
-import Text.Pretty.Simple (pPrint)
+import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import qualified Simulator.Calendar as Calendar
 import qualified Simulator.Simulation as Simulation
+import qualified Text.Pretty.Simple as PP
 
 -- Main ------------------------------------------------------------------------
 
 main :: IO ()
 main = do
   let result = Simulation.foldCalendar' initialState calendar
-  pPrint result
+  pp result
+
+pp :: Show a => a -> IO ()
+pp = PP.pPrintOpt
+     PP.CheckColorTty
+     PP.defaultOutputOptionsDarkBg {PP.outputOptionsCompactParens = True}
 
 -- Types -----------------------------------------------------------------------
 
 newtype Client = Client Int
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 type ClientCount = Int
 type ClientQueue = Seq Client
+type ClientTimes = Map Client Time
 
 data Event
   = Arrival Client
@@ -33,17 +42,31 @@ data Event
 
 data State
   = State
-    { time  :: Time
-    , queue :: ClientQueue
+    { time         :: Time
+    , queue        :: ClientQueue
+    , waitingTimes :: ClientTimes
+    , serviceTimes :: ClientTimes
     } deriving (Show)
+
+-- Helpers ---------------------------------------------------------------------
+
+incrementTime :: ClientTimes -> Client -> Time  -> ClientTimes
+incrementTime m client amount = Map.insertWith (+) client amount m
+
+incrementTimes :: ClientTimes -> ClientQueue -> Time -> ClientTimes
+incrementTimes m clients amount = Map.unionWith (+) clients' m
+  where
+    clients' = Map.fromList $ (\c -> (c, amount)) <$> toList clients
 
 -- Initial values --------------------------------------------------------------
 
 initialState :: State
 initialState
   = State
-    { time = Time 0
-    , queue = Seq.empty
+    { time         = Time 0
+    , queue        = Seq.empty
+    , waitingTimes = Map.empty
+    , serviceTimes = Map.empty
     }
 
 calendar :: Calendar Event
@@ -64,11 +87,25 @@ calendar
 -- Simulation ------------------------------------------------------------------
 
 instance Simulation State Event where
-  transition (State _time q) (Entry eTime event)
-    = State eTime queue'
+  transition (State sTime q wt st) (Entry eTime event)
+    = State eTime queue' waitingTimes' serviceTimes'
     where
+      dTime = eTime - sTime
+
       queue' = case (event, q) of
         (Arrival c, Empty)   -> Seq.singleton c
         (Arrival c, _ :<| _) -> q |> c
         (Departure, Empty)   -> error "Illegal state"
         (Departure, _ :<| t) -> t
+
+      waitingTimes' = case (event, q) of
+        (Arrival c, Empty)   -> Map.insert c 0 wt
+        (Arrival _, _ :<| t) -> incrementTimes wt t dTime
+        (Departure, Empty)   -> error "Illegal state"
+        (Departure, _ :<| t) -> incrementTimes wt t dTime
+
+      serviceTimes' = case (event, q) of
+        (Arrival c, Empty)   -> Map.insert c 0 st
+        (Arrival _, h :<| _) -> incrementTime st h dTime
+        (Departure, Empty)   -> error "Illegal state"
+        (Departure, h :<| _) -> incrementTime st h dTime
