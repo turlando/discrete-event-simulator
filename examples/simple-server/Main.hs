@@ -17,9 +17,7 @@ import qualified Text.Pretty.Simple as PP
 -- Main ------------------------------------------------------------------------
 
 main :: IO ()
-main = do
-  let result = Simulation.foldCalendar' initialState calendar
-  pp result
+main = pp (result $ Simulation.foldCalendar' initialState calendar)
 
 pp :: Show a => a -> IO ()
 pp = PP.pPrintOpt
@@ -31,9 +29,10 @@ pp = PP.pPrintOpt
 newtype Client = Client Int
   deriving (Eq, Ord, Show)
 
-type ClientCount = Int
-type ClientQueue = Seq Client
-type ClientTimes = Map Client Time
+type ClientCount      = Int
+type ClientQueue      = Seq Client
+type ClientTimes      = Map Client Time
+type ClientCountTimes = Map ClientCount Time
 
 data Event
   = Arrival Client
@@ -42,10 +41,18 @@ data Event
 
 data State
   = State
-    { time         :: Time
-    , queue        :: ClientQueue
-    , waitingTimes :: ClientTimes
-    , serviceTimes :: ClientTimes
+    { time             :: Time
+    , queue            :: ClientQueue
+    , waitingTimes     :: ClientTimes
+    , serviceTimes     :: ClientTimes
+    , clientCountTimes :: ClientCountTimes
+    } deriving (Show)
+
+data Result
+  = Result
+    { expectedWaitingTime :: Time
+    , utilization         :: Time
+    , expectedQueueLength :: Time
     } deriving (Show)
 
 -- Helpers ---------------------------------------------------------------------
@@ -63,10 +70,11 @@ incrementTimes m clients amount = Map.unionWith (+) clients' m
 initialState :: State
 initialState
   = State
-    { time         = Time 0
-    , queue        = Seq.empty
-    , waitingTimes = Map.empty
-    , serviceTimes = Map.empty
+    { time             = Time 0
+    , queue            = Seq.empty
+    , waitingTimes     = Map.empty
+    , serviceTimes     = Map.empty
+    , clientCountTimes = Map.empty
     }
 
 calendar :: Calendar Event
@@ -87,8 +95,8 @@ calendar
 -- Simulation ------------------------------------------------------------------
 
 instance Simulation State Event where
-  transition (State sTime q wt st) (Entry eTime event)
-    = State eTime queue' waitingTimes' serviceTimes'
+  transition (State sTime q wt st cct) (Entry eTime event)
+    = State eTime queue' waitingTimes' serviceTimes' clientCountTimes'
     where
       dTime = eTime - sTime
 
@@ -109,3 +117,21 @@ instance Simulation State Event where
         (Arrival _, h :<| _) -> incrementTime st h dTime
         (Departure, Empty)   -> error "Illegal state"
         (Departure, h :<| _) -> incrementTime st h dTime
+
+      clientCountTimes' = Map.insertWith (+) (Seq.length q) dTime cct
+
+result :: State -> Result
+result (State t _q wt st cct)
+  = Result expectedWaitingTime' utilization' expectedQueueLength'
+  where
+    expectedWaitingTime'
+      = (/) ((sum $ Map.elems wt) + (sum $ Map.elems st))
+            (fromIntegral $ Map.size wt)
+
+    utilization' = (sum $ Map.elems st) / t
+
+    expectedQueueLength'
+      = (/) (sum $ zipWith (*)
+                           (fromIntegral <$> Map.keys cct)
+                           (Map.elems cct))
+            t
