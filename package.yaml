@@ -44,6 +44,8 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - discrete-event-simulator
+    - containers
+    - pretty-simple
 
 tests:
   discrete-event-simulator-test:

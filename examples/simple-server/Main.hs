@@ -2,19 +2,29 @@
 
 module Main where
 
-import Simulator.Time (Time(..))
+import Data.Sequence (Seq(Empty, (:<|)), (|>))
 import Simulator.Calendar (Calendar, Entry(..))
 import Simulator.Simulation (Simulation(..))
+import Simulator.Time (Time(..))
+import Text.Pretty.Simple (pPrint)
+import qualified Data.Sequence as Seq
 import qualified Simulator.Calendar as Calendar
 import qualified Simulator.Simulation as Simulation
+
+-- Main ------------------------------------------------------------------------
 
 main :: IO ()
 main = do
   let result = Simulation.foldCalendar' initialState calendar
-  putStrLn $ show result
+  pPrint result
+
+-- Types -----------------------------------------------------------------------
 
 newtype Client = Client Int
   deriving (Eq, Show)
+
+type ClientCount = Int
+type ClientQueue = Seq Client
 
 data Event
   = Arrival Client
@@ -24,11 +34,17 @@ data Event
 data State
   = State
     { time  :: Time
-    , count :: Int
+    , queue :: ClientQueue
     } deriving (Show)
 
+-- Initial values --------------------------------------------------------------
+
 initialState :: State
-initialState = State { time = Time 0, count = 0 }
+initialState
+  = State
+    { time = Time 0
+    , queue = Seq.empty
+    }
 
 calendar :: Calendar Event
 calendar
@@ -45,10 +61,14 @@ calendar
     , (15, Departure)
     ]
 
+-- Simulation ------------------------------------------------------------------
+
 instance Simulation State Event where
-  transition (State _time clientCount) (Entry eTime event)
-    = case event of
-        (Arrival _client) ->
-          State eTime (clientCount + 1)
-        Departure ->
-          State eTime (clientCount - 1)
+  transition (State _time q) (Entry eTime event)
+    = State eTime queue'
+    where
+      queue' = case (event, q) of
+        (Arrival c, Empty)   -> Seq.singleton c
+        (Arrival c, _ :<| _) -> q |> c
+        (Departure, Empty)   -> error "Illegal state"
+        (Departure, _ :<| t) -> t
