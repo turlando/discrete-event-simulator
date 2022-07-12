@@ -23,6 +23,7 @@ dependencies:
 - base >= 4.7 && < 5
 - hashable
 - psqueues
+- random
 
 library:
   source-dirs:
@@ -38,6 +39,18 @@ executables:
   simple-server:
     main:                Main.hs
     source-dirs:         examples/simple-server
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - discrete-event-simulator
+    - containers
+    - pretty-simple
+
+  simple-server-random:
+    main:                Main.hs
+    source-dirs:         examples/simple-server-random
     ghc-options:
     - -threaded
     - -rtsopts
