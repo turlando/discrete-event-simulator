@@ -140,6 +140,19 @@ randomDeparture g (Time t)
   = let (r, g') = exponential g arrivalRate
     in (Entry (Time $ t + r) Departure, g')
 
+addRandomPair
+  :: RandomGen g
+  => g
+  -> Time
+  -> Client
+  -> Calendar Event
+  -> (Calendar Event, g)
+addRandomPair g t nc c
+  = let (a, g')  = randomArrival g t nc
+        aTime    = entryTime a
+        (d, g'') = randomDeparture g' aTime
+    in (Calendar.insert a $ Calendar.insert d c, g'')
+
 newClient :: Client -> Client
 newClient (Client c) = (Client $ c + 1)
 
@@ -179,7 +192,19 @@ transitionsR' g endTime simTime nextClient calendar acc@(s:_)
         in transitionsR' g' endTime eTime client' c' (s':acc)
       Just (entry@(Entry eTime (Departure)), calendar') ->
         let s'      = transition s entry
-            client' = newClient nextClient
-            (d, g') = randomDeparture g eTime
-            c'      = Calendar.insert d calendar'
-        in transitionsR' g' endTime eTime client' c' (s':acc)
+            na      = findNextArrival calendar'
+            in case na of
+              Nothing ->
+                transitionsR' g endTime eTime nextClient calendar' (s':acc)
+              Just e ->
+                let naTime  = entryTime e
+                    (d, g') = randomDeparture g naTime
+                    c'      = Calendar.insert d calendar'
+                in transitionsR' g' endTime eTime nextClient c' (s':acc)
+
+findNextArrival :: Calendar Event -> Maybe (Entry Event)
+findNextArrival c
+  = case Calendar.uncons c of
+      Nothing -> Nothing
+      Just (e@(Entry _ (Arrival _)), _) -> Just e
+      Just ((Entry _ Departure), c')     -> findNextArrival c'
