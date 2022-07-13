@@ -56,16 +56,6 @@ data Result
     , expectedQueueLength :: Time
     } deriving (Show)
 
--- Helpers ---------------------------------------------------------------------
-
-incrementTime :: ClientTimes -> Client -> Time  -> ClientTimes
-incrementTime m client amount = Map.insertWith (+) client amount m
-
-incrementTimes :: ClientTimes -> ClientQueue -> Time -> ClientTimes
-incrementTimes m clients amount = Map.unionWith (+) clients' m
-  where
-    clients' = Map.fromList $ (\c -> (c, amount)) <$> toList clients
-
 -- Initial values --------------------------------------------------------------
 
 initialState :: State
@@ -77,6 +67,56 @@ initialState
     , serviceTimes     = Map.empty
     , clientCountTimes = Map.empty
     }
+
+-- Random parameters -----------------------------------------------------------
+
+arrivalRate :: Float
+arrivalRate = 0.3
+
+serviceRate :: Float
+serviceRate = 0.5
+
+-- Helpers ---------------------------------------------------------------------
+
+incrementTime :: ClientTimes -> Client -> Time  -> ClientTimes
+incrementTime m client amount = Map.insertWith (+) client amount m
+
+incrementTimes :: ClientTimes -> ClientQueue -> Time -> ClientTimes
+incrementTimes m clients amount = Map.unionWith (+) clients' m
+  where
+    clients' = Map.fromList $ (\c -> (c, amount)) <$> toList clients
+
+firstArrival :: Calendar Event -> Maybe (Entry Event)
+firstArrival c
+  = case Calendar.uncons c of
+      Nothing -> Nothing
+      Just (e@(Entry _ (Arrival _)), _) -> Just e
+      Just ((Entry _ Departure), c')     -> firstArrival c'
+
+-- Random helpers --------------------------------------------------------------
+
+randomArrival :: RandomGen g => g -> Time -> Client -> (Entry Event, g)
+randomArrival g (Time t) c
+  = let (r, g') = exponential g arrivalRate
+    in (Entry (Time $ t + r) (Arrival c), g')
+
+randomDeparture :: RandomGen g => g -> Time -> (Entry Event, g)
+randomDeparture g (Time t)
+  = let (r, g') = exponential g arrivalRate
+    in (Entry (Time $ t + r) Departure, g')
+
+addRandomPair
+  :: RandomGen g
+  => g
+  -> Time
+  -> Client
+  -> Calendar Event
+  -> (Calendar Event, g)
+addRandomPair g t nc c
+  = let (a, g')  = randomArrival g t nc
+        aTime    = entryTime a
+        (d, g'') = randomDeparture g' aTime
+    in (Calendar.insert a $ Calendar.insert d c, g'')
 
 -- Simulation ------------------------------------------------------------------
 
@@ -124,35 +164,6 @@ result (State t _q wt st cct)
 
 -- Random ----------------------------------------------------------------------
 
-arrivalRate :: Float
-arrivalRate = 0.3
-
-serviceRate :: Float
-serviceRate = 0.5
-
-randomArrival :: RandomGen g => g -> Time -> Client -> (Entry Event, g)
-randomArrival g (Time t) c
-  = let (r, g') = exponential g arrivalRate
-    in (Entry (Time $ t + r) (Arrival c), g')
-
-randomDeparture :: RandomGen g => g -> Time -> (Entry Event, g)
-randomDeparture g (Time t)
-  = let (r, g') = exponential g arrivalRate
-    in (Entry (Time $ t + r) Departure, g')
-
-addRandomPair
-  :: RandomGen g
-  => g
-  -> Time
-  -> Client
-  -> Calendar Event
-  -> (Calendar Event, g)
-addRandomPair g t nc c
-  = let (a, g')  = randomArrival g t nc
-        aTime    = entryTime a
-        (d, g'') = randomDeparture g' aTime
-    in (Calendar.insert a $ Calendar.insert d c, g'')
-
 newClient :: Client -> Client
 newClient (Client c) = (Client $ c + 1)
 
@@ -191,20 +202,15 @@ transitionsR' g endTime simTime nextClient calendar acc@(s:_)
             client' = newClient nextClient
         in transitionsR' g' endTime eTime client' c' (s':acc)
       Just (entry@(Entry eTime (Departure)), calendar') ->
-        let s'      = transition s entry
-            na      = findNextArrival calendar'
-            in case na of
-              Nothing ->
-                transitionsR' g endTime eTime nextClient calendar' (s':acc)
-              Just e ->
-                let naTime  = entryTime e
-                    (d, g') = randomDeparture g naTime
+        let s' = transition s entry
+            t' = time s'
+        in if Seq.null $ queue s'
+           then let (a, g')  = randomArrival g simTime nextClient
+                    aTime    = entryTime a
+                    (d, g'') = randomDeparture g' aTime
+                    c'       = Calendar.fromList [a, d]
+                    client'  = newClient nextClient
+                in transitionsR' g'' endTime t' client' c' acc
+           else let (d, g') = randomDeparture g eTime
                     c'      = Calendar.insert d calendar'
-                in transitionsR' g' endTime eTime nextClient c' (s':acc)
-
-findNextArrival :: Calendar Event -> Maybe (Entry Event)
-findNextArrival c
-  = case Calendar.uncons c of
-      Nothing -> Nothing
-      Just (e@(Entry _ (Arrival _)), _) -> Just e
-      Just ((Entry _ Departure), c')     -> findNextArrival c'
+                in transitionsR' g' endTime t' nextClient c' (s':acc)
