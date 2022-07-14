@@ -188,12 +188,10 @@ transitionsR' g endTime simTime nextClient calendar acc@(s:_)
   | simTime >= endTime = reverse acc
   | otherwise = case Calendar.uncons calendar of
       Nothing ->
-        let (a, g')  = randomArrival g simTime nextClient
-            aTime    = entryTime a
-            (d, g'') = randomDeparture g' aTime
-            c'       = Calendar.fromList [a, d]
-            client'  = newClient nextClient
-        in transitionsR' g'' endTime simTime client' c' acc
+        let (a, d, g') = randomPair g simTime nextClient
+            c'         = Calendar.fromList [a, d]
+            client'    = newClient nextClient
+        in transitionsR' g' endTime simTime client' c' acc
       Just (entry@(Entry eTime (Arrival _)), calendar') ->
         let s'      = transition s entry
             (a, g') = randomArrival g eTime nextClient
