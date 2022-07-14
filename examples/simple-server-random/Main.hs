@@ -105,18 +105,17 @@ randomDeparture g (Time t)
   = let (r, g') = exponential g arrivalRate
     in (Entry (Time $ t + r) Departure, g')
 
-addRandomPair
+randomPair
   :: RandomGen g
   => g
   -> Time
   -> Client
-  -> Calendar Event
-  -> (Calendar Event, g)
-addRandomPair g t nc c
+  -> (Entry Event, Entry Event, g)
+randomPair g t nc
   = let (a, g')  = randomArrival g t nc
         aTime    = entryTime a
         (d, g'') = randomDeparture g' aTime
-    in (Calendar.insert a $ Calendar.insert d c, g'')
+    in (a, d, g'')
 
 -- Simulation ------------------------------------------------------------------
 
@@ -203,14 +202,18 @@ transitionsR' g endTime simTime nextClient calendar acc@(s:_)
         in transitionsR' g' endTime eTime client' c' (s':acc)
       Just (entry@(Entry eTime (Departure)), calendar') ->
         let s' = transition s entry
-            t' = time s'
-        in if Seq.null $ queue s'
-           then let (a, g')  = randomArrival g simTime nextClient
-                    aTime    = entryTime a
-                    (d, g'') = randomDeparture g' aTime
-                    c'       = Calendar.fromList [a, d]
-                    client'  = newClient nextClient
-                in transitionsR' g'' endTime t' client' c' acc
-           else let (d, g') = randomDeparture g eTime
-                    c'      = Calendar.insert d calendar'
-                in transitionsR' g' endTime t' nextClient c' (s':acc)
+            fa = firstArrival calendar'
+        in case (Seq.null $ queue s', fa) of
+          (True, Nothing) ->
+            let (a, d, g') = randomPair g simTime nextClient
+                c'         = Calendar.insert a $ Calendar.insert d calendar'
+                client'    = newClient nextClient
+            in transitionsR' g' endTime eTime client' c' acc
+          (True, Just (Entry naTime _)) ->
+            let (d, g') = randomDeparture g naTime
+                c'      = Calendar.insert d calendar'
+            in transitionsR' g' endTime eTime nextClient c' (s':acc)
+          (False, _) ->
+            let (d, g') = randomDeparture g eTime
+                c'      = Calendar.insert d calendar'
+            in transitionsR' g' endTime eTime nextClient c' (s':acc)
