@@ -59,6 +59,8 @@ executables:
     - discrete-event-simulator
     - containers
     - pretty-simple
+    - statistics
+    - vector
 
 tests:
   discrete-event-simulator-test:

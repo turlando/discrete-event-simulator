@@ -2,23 +2,29 @@
 
 module Main where
 
+import Control.Monad (replicateM)
 import Data.Foldable (toList)
 import Data.Map.Strict (Map)
 import Data.Sequence (Seq(Empty, (:<|)), (|>))
+import Data.Vector (Vector)
 import Simulator.Calendar (Calendar, Entry(..))
 import Simulator.Simulation (Simulation(..))
 import Simulator.Time (Time(..))
 import Simulator.Random (exponential)
-import System.Random (RandomGen, mkStdGen)
+import Statistics.Distribution (quantile)
+import Statistics.Distribution.StudentT (StudentT, studentT)
+import Statistics.Sample (mean, varianceUnbiased)
+import System.Random (RandomGen, newStdGen)
 import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
+import qualified Data.Vector as Vector
 import qualified Simulator.Calendar as Calendar
 import qualified Text.Pretty.Simple as PP
 
 -- Main ------------------------------------------------------------------------
 
 main :: IO ()
-main = pp $ transitionsR (mkStdGen 23) (Time 100)
+main = (analyse 120 (Time 100) 0.95) >>= pp
 
 pp :: Show a => a -> IO ()
 pp = PP.pPrintOpt
@@ -54,7 +60,7 @@ data Result
   = Result
     { expectedWaitingTime :: Time
     , utilization         :: Time
-    , expectedQueueLength :: Time
+    , expectedQueueLength :: Float
     } deriving (Show)
 
 -- Initial values --------------------------------------------------------------
@@ -182,14 +188,18 @@ result (State t _q wt st cct)
     expectedQueueLength'
       = (/) (sum $ zipWith (*)
                            (fromIntegral <$> Map.keys cct)
-                           (Map.elems cct))
-            t
+                           (unTime <$> Map.elems cct))
+            (unTime t)
 
 -- Random ----------------------------------------------------------------------
 
+resultR :: RandomGen g => g -> Time -> State
+resultR g endTime
+  = head $ transitionsR' g endTime (Time 0) (Client 1) Calendar.empty []
+
 transitionsR :: RandomGen g => g -> Time -> [State]
 transitionsR g endTime
-  = transitionsR' g endTime (Time 0) (Client 1) Calendar.empty []
+  = reverse $ transitionsR' g endTime (Time 0) (Client 1) Calendar.empty []
 
 transitionsR'
   :: RandomGen g
@@ -203,7 +213,7 @@ transitionsR'
 transitionsR' g endTime simTime nextClient calendar []
   = transitionsR' g endTime simTime nextClient calendar [initialState]
 transitionsR' g endTime simTime nextClient calendar acc@(s:_)
-  | simTime >= endTime = reverse acc
+  | simTime >= endTime = acc
   | otherwise = case Calendar.uncons calendar of
       Nothing ->
         let (a, d, g') = randomPair g simTime nextClient
@@ -236,3 +246,65 @@ transitionsR' g endTime simTime nextClient calendar acc@(s:_)
       Just (entry@(Entry eTime NoOperation), calendar') ->
         let s' = transition s entry
         in transitionsR' g endTime eTime nextClient calendar' (s':acc)
+
+-- Analysis --------------------------------------------------------------------
+
+data FinalResult
+  = FinalResult
+    { finalExpectedWaitingTime :: (Time, Time)
+    , finalUtilization         :: (Time, Time)
+    , finalExpectedQueueLength :: (Float, Float)
+    } deriving (Show)
+
+mean' :: [Float] -> Float
+mean' xs = realToFrac $ mean v
+  where
+    v :: Vector Double
+    v = Vector.fromList (realToFrac <$> xs)
+
+sampleVariance :: [Float] -> Float
+sampleVariance xs = realToFrac $ sqrt $ varianceUnbiased v
+  where
+    v :: Vector Double
+    v = Vector.fromList (realToFrac <$> xs)
+
+analyse :: Int -> Time -> Float -> IO FinalResult
+analyse count endTime confidence = do
+  rm' <- rm
+  rsv' <- rsv
+  return $ FinalResult
+    ((expectedWaitingTime rm'), (Time $ (unTime $ expectedWaitingTime rsv') * t))
+    ((utilization rm'),         (Time $ (unTime $ utilization rsv') * t))
+    ((expectedQueueLength rm'), ((expectedQueueLength rsv') * t))
+  where
+    results :: IO [Result]
+    results = (fmap result) <$> replicateM count act
+
+    act :: IO State
+    act = do
+      g <- newStdGen
+      return $ resultR g endTime
+
+    distribution :: StudentT
+    distribution = studentT $ fromIntegral count
+
+    t :: Float
+    t = realToFrac $ quantile distribution $ realToFrac confidence
+
+    resultMean :: [Result] -> Result
+    resultMean xs = Result wts us qls
+      where
+        wts = Time $ mean' $ (unTime . expectedWaitingTime) <$> xs
+        us  = Time $ mean' $ (unTime . utilization) <$> xs
+        qls = mean' $ expectedQueueLength <$> xs
+
+    resultSampleVariance :: [Result] -> Result
+    resultSampleVariance xs = Result wts us qls
+      where
+        wts = Time $ sampleVariance $ (unTime . expectedWaitingTime) <$> xs
+        us  = Time $ sampleVariance $ (unTime . utilization) <$> xs
+        qls = sampleVariance $ expectedQueueLength <$> xs
+
+    rm  = resultMean <$> results
+    rsv = resultSampleVariance <$> results
+
