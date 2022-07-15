@@ -39,13 +39,17 @@ toList (Calendar q) = reshape <$> Q.toList q
 -- Insertion
 --------------------------------------------------------------------------------
 
-insert :: Show event => Entry event -> Calendar event -> Calendar event
+singleton :: Entry event -> Calendar event
+singleton (Entry t e) = Calendar $ Q.singleton t () e
+
+insert :: Entry event -> Calendar event -> Calendar event
 insert (Entry time event) (Calendar q)
   = case Q.insertView time () event q of
       (Nothing, q')         -> Calendar q'
-      ((Just _evicted), _q) ->
-        error $ "It's not possible to insert " ++ (show event) ++ " at " ++
-                (show time) ++ " because there already is " ++ (show _evicted)
+      ((Just _evicted), _q) -> Calendar q -- FIXME: silently fails
+      -- ((Just _evicted), _q) ->
+      --   error $ "It's not possible to insert " ++ (show event) ++ " at " ++
+      --           (show time) ++ " because there already is " ++ (show _evicted)
 
 
 ------------------------------------------------------------------------------
