@@ -2,6 +2,7 @@
 
 module Main where
 
+import Client (Client(..), ClientIdS)
 import Control.Monad (replicateM)
 import Data.Foldable (toList)
 import Data.Map.Strict (Map)
@@ -15,6 +16,7 @@ import Statistics.Distribution (quantile)
 import Statistics.Distribution.StudentT (StudentT, studentT)
 import Statistics.Sample (meanVarianceUnb)
 import System.Random (StdGen, RandomGen, newStdGen)
+import qualified Client
 import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import qualified Data.Vector as Vector
@@ -25,6 +27,7 @@ import qualified Text.Pretty.Simple as PP
 
 main :: IO ()
 main = analyse 0.95 <$> repeatR resultR 120 (Time 100) >>= pp
+-- main = repeatR transitionsR 1 (Time 100) >>= pp
 
 pp :: Show a => a -> IO ()
 pp = PP.pPrintOpt
@@ -32,9 +35,6 @@ pp = PP.pPrintOpt
      PP.defaultOutputOptionsDarkBg {PP.outputOptionsCompactParens = True}
 
 -- Types -----------------------------------------------------------------------
-
-newtype Client = Client Int
-  deriving (Eq, Ord, Show)
 
 type ClientCount      = Int
 type ClientQueue      = Seq Client
@@ -258,7 +258,9 @@ transitionsR g endTime
 transitionsResultR :: RandomGen g => g -> Time -> ([State], Result)
 transitionsResultR g endTime = (states, result')
   where
-    transitions' = transitionsR' g endTime (Time 0) (Client 1) Calendar.empty []
+    transitions' = Client.evalS
+                   (transitionsR' g endTime (Time 0) Calendar.empty [])
+                   (Client 1)
     finalState   = head transitions'
     states       = reverse transitions'
     result'      = result finalState
@@ -268,43 +270,40 @@ transitionsR'
   => g
   -> Time
   -> Time
-  -> Client
   -> Calendar Event
   -> [State]
-  -> [State]
-transitionsR' g endTime simTime nextClient calendar []
-  = transitionsR' g endTime simTime nextClient calendar [initialState]
-transitionsR' g endTime simTime nextClient calendar acc@(s:_)
-  | simTime >= endTime = acc
+  -> ClientIdS [State]
+transitionsR' g endTime simTime calendar []
+  = transitionsR' g endTime simTime calendar [initialState]
+transitionsR' g endTime simTime calendar acc@(s:_)
+  | simTime >= endTime = return acc
   | otherwise = case Calendar.uncons calendar of
-      Nothing ->
+      Nothing -> Client.next >>= \nextClient ->
         let (a, d, g') = randomPair g simTime nextClient
             c'         = fromList' [a, d] endTime
-            client'    = newClient nextClient
-        in transitionsR' g' endTime simTime client' c' acc
+        in transitionsR' g' endTime simTime c' acc
       Just (entry@(Entry eTime (Arrival _)), calendar') ->
-        let s'      = transition s entry
-            (a, g') = randomArrival g eTime nextClient
-            c'      = insert' a endTime calendar'
-            client' = newClient nextClient
-        in transitionsR' g' endTime eTime client' c' (s':acc)
+        Client.next >>= \nextClient ->
+          let s'      = transition s entry
+              (a, g') = randomArrival g eTime nextClient
+              c'      = insert' a endTime calendar'
+          in transitionsR' g' endTime eTime c' (s':acc)
       Just (entry@(Entry eTime Departure), calendar') ->
         let s' = transition s entry
             fa = firstArrival calendar'
         in case (Seq.null $ queue s', fa) of
-          (True, Nothing) ->
+          (True, Nothing) -> Client.next >>= \nextClient ->
             let (a, d, g') = randomPair g simTime nextClient
                 c'         = insert' a endTime $ insert' d endTime calendar'
-                client'    = newClient nextClient
-            in transitionsR' g' endTime eTime client' c' acc
-          (True, Just (Entry naTime _)) ->
+            in transitionsR' g' endTime eTime c' acc
+          (True, Just (Entry naTime _)) -> 
             let (d, g') = randomDeparture g naTime
                 c'      = insert' d endTime calendar'
-            in transitionsR' g' endTime eTime nextClient c' (s':acc)
-          (False, _) ->
+            in transitionsR' g' endTime eTime c' (s':acc)
+          (False, _) -> 
             let (d, g') = randomDeparture g eTime
                 c'      = insert' d endTime calendar'
-            in transitionsR' g' endTime eTime nextClient c' (s':acc)
+            in transitionsR' g' endTime eTime c' (s':acc)
       Just (entry@(Entry eTime NoOperation), calendar') ->
         let s' = transition s entry
-        in transitionsR' g endTime eTime nextClient calendar' (s':acc)
+        in transitionsR' g endTime eTime calendar' (s':acc)

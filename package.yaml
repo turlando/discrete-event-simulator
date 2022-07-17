@@ -58,6 +58,7 @@ executables:
     dependencies:
     - discrete-event-simulator
     - containers
+    - mtl
     - pretty-simple
     - statistics
     - vector
